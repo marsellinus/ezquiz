@@ -51,3 +51,9 @@ next-env.d.ts
 /dev.db
 install.log
 *.mp4
+
+# AI tool skill packs (generated locally by the Prisma skills installer)
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
