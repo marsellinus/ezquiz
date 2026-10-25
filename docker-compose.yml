@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database Container
+  postgres:
+    image: postgres:16-alpine
+    container_name: quiz_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: online_exam
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Web App Container
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quiz_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/online_exam?sslmode=disable"
+      AUTH_SECRET: ${AUTH_SECRET:-change-me-generate-with-openssl-rand-base64-32}
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      NODE_ENV: "production"
+      # Uploaded media lives on a volume so it survives rebuilds and is served by
+      # /api/uploads/[...path] (runtime files in public/ are not served by `next start`).
+      UPLOAD_DIR: "/app/uploads"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Cloudflare Tunnel Container
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: quiz_tunnel
+    restart: always
+    command: tunnel --url http://web:3000
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  uploads_data:

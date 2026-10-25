@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  AUTHOR
+  ADMIN
+}
+
+enum PickerStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AttachmentType {
+  IMAGE
+  VIDEO
+  FILE
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  MULTIPLE_SELECT
+  TRUE_FALSE
+  SHORT_ANSWER
+  LONG_ANSWER
+}
+
+enum QuizMode {
+  SELF_PACED
+  LIVE
+}
+
+enum SessionStatus {
+  WAITING
+  COUNTDOWN
+  QUESTION_ACTIVE
+  QUESTION_ENDED
+  LEADERBOARD
+  FINISHED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(AUTHOR)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  randomPickers RandomPicker[]
+  quizzes       Quiz[]
+
+  @@index([email])
+}
+
+model RandomPicker {
+  id          String                @id @default(cuid())
+  authorId    String
+  author      User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  slug        String                @unique
+  status      PickerStatus          @default(DRAFT)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  publishedAt DateTime?
+  questions   Question[]
+  settings    RandomPickerSettings?
+  histories   RandomPickHistory[]
+
+  @@index([authorId])
+  @@index([slug])
+  @@index([status])
+}
+
+model RandomPickerSettings {
+  id                     String       @id @default(cuid())
+  randomPickerId         String       @unique
+  randomPicker           RandomPicker @relation(fields: [randomPickerId], references: [id], onDelete: Cascade)
+  allowRepeat            Boolean      @default(true)
+  preventImmediateRepeat Boolean      @default(true)
+  noRepeatUntilAllShown  Boolean      @default(false)
+  showQuestionNumber     Boolean      @default(false)
+  showAttachments        Boolean      @default(true)
+  showLinks              Boolean      @default(true)
+}
+
+model Question {
+  id             String               @id @default(cuid())
+  randomPickerId String?
+  randomPicker   RandomPicker?        @relation(fields: [randomPickerId], references: [id], onDelete: Cascade)
+  type           QuestionType         @default(MULTIPLE_CHOICE)
+  content        String
+  explanation    String?
+  position       Int                  @default(0)
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  attachments    QuestionAttachment[]
+  links          QuestionLink[]
+  histories      RandomPickHistory[]
+  options        QuestionOption[]
+  quizQuestions  QuizQuestion[]
+  answers        ParticipantAnswer[]
+
+  @@index([randomPickerId])
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean  @default(false)
+  position   Int      @default(0)
+
+  @@index([questionId])
+}
+
+model QuestionAttachment {
+  id         String         @id @default(cuid())
+  questionId String
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  type       AttachmentType
+  fileName   String
+  fileUrl    String
+  mimeType   String
+  fileSize   Int
+  createdAt  DateTime       @default(now())
+
+  @@index([questionId])
+}
+
+model QuestionLink {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  url        String
+  title      String
+  createdAt  DateTime @default(now())
+
+  @@index([questionId])
+}
+
+model RandomPickHistory {
+  id             String       @id @default(cuid())
+  randomPickerId String
+  randomPicker   RandomPicker @relation(fields: [randomPickerId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  sessionId      String
+  pickedAt       DateTime     @default(now())
+
+  @@index([randomPickerId, sessionId])
+  @@index([questionId])
+}
+
+model Quiz {
+  id          String         @id @default(cuid())
+  authorId    String
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  slug        String         @unique
+  status      PickerStatus   @default(DRAFT)
+  mode        QuizMode       @default(SELF_PACED)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  publishedAt DateTime?
+  questions   QuizQuestion[]
+  sessions    QuizSession[]
+
+  @@index([authorId])
+  @@index([slug])
+  @@index([status])
+}
+
+model QuizQuestion {
+  id         String   @id @default(cuid())
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  position   Int      @default(0)
+  points     Int      @default(100)
+  timeLimit  Int      @default(30) // Seconds
+
+  @@index([quizId])
+  @@index([questionId])
+}
+
+model QuizSession {
+  id                   String                @id @default(cuid())
+  quizId               String
+  quiz                 Quiz                  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  joinCode             String                @unique
+  sessionName          String?
+  status               SessionStatus         @default(WAITING)
+  currentQuestionIndex Int                   @default(0)
+  startedAt            DateTime?
+  endedAt              DateTime?
+  createdAt            DateTime              @default(now())
+  participants         Participant[]
+  answers              ParticipantAnswer[]
+  leaderboard          LeaderboardSnapshot[]
+
+  @@index([joinCode])
+  @@index([quizId])
+}
+
+model Participant {
+  id             String              @id @default(cuid())
+  sessionId      String
+  session        QuizSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  nickname       String
+  className      String?
+  sessionToken   String
+  score          Int                 @default(0)
+  tabSwitchCount Int                 @default(0)
+  joinedAt       DateTime            @default(now())
+  lastSeenAt     DateTime            @updatedAt
+  answers        ParticipantAnswer[]
+
+  @@index([sessionId])
+  @@index([sessionId, sessionToken])
+}
+
+model ParticipantAnswer {
+  id            String      @id @default(cuid())
+  sessionId     String
+  session       QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answerData    String      // JSON string of submitted option IDs or text
+  isCorrect     Boolean     @default(false)
+  points        Int         @default(0)
+  responseTime  Float       @default(0) // In seconds
+  answeredAt    DateTime    @default(now())
+
+  @@unique([sessionId, participantId, questionId])
+  @@index([sessionId])
+  @@index([participantId])
+}
+
+model LeaderboardSnapshot {
+  id            String      @id @default(cuid())
+  sessionId     String
+  session       QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId String
+  rank          Int
+  score         Int
+  createdAt     DateTime    @default(now())
+
+  @@index([sessionId])
+}

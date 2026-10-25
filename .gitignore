@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (can opt-in to committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# uploaded media (served at runtime via /api/uploads, not part of the build)
+/public/uploads/
+/uploads/
+
+/src/generated/prisma
+
+# local-only artifacts (never part of the app)
+/dev.db
+install.log
+*.mp4
